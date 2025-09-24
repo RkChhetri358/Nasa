@@ -3,52 +3,113 @@ import AOS from "aos";
 import OpenSeadragonViewer from "../OpenSeadragon/OpenSeadragonViewer";
 
 export default function Explore() {
-  const [planet, setPlanet] = useState("mars"); // default view = Mars
+  const [planet, setPlanet] = useState("mars");
+  const [marsView, setMarsView] = useState("global");
+  const [moonView, setMoonView] = useState("global");
+  const [mercuryView, setMercuryView] = useState("global");
 
   useEffect(() => {
     AOS.init({ duration: 5000 });
   }, []);
 
-  // Moon tiles
-const moonTileSource = {
-  width: 21600,
-  height: 10800,
-  tileSize: 256,
-  minLevel: 0,
-  maxLevel: 7,
-  getTileUrl: (level, x, y) =>
-    `https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
-};
-  // Mars tiles
-  const marsTileSource = {
-    width: 65536,
-    height: 32768,
-    tileSize: 256,
-    minLevel: 0,
-    maxLevel: 7,
-    getTileUrl: (level, x, y) =>
-      `https://trek.nasa.gov/tiles/Mars/EQ/Mars_MGS_MOLA_ClrShade_merge_global_463m/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+  const proxy = "https://corsproxy.io/?";
+
+  const marsTileSources = {
+    global: {
+      width: 65536,
+      height: 32768,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mars/EQ/Mars_MGS_MOLA_ClrShade_merge_global_463m/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    valles: {
+      width: 32768,
+      height: 16384,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mars/EQ/Valles_Marineris/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    olympus: {
+      width: 32768,
+      height: 16384,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mars/EQ/Olympus_Mons/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
   };
 
-  // Mercury tiles
-  const mercuryTileSource = {
-    width: 98304, // adjust based on actual dataset
-    height: 49152, // adjust based on actual dataset
-    tileSize: 256,
-    minLevel: 0,
-    maxLevel: 7,
-    getTileUrl: (level, x, y) =>
-      `https://trek.nasa.gov/tiles/Mercury/EQ/Mercury_MESSENGER_MDIS_Basemap_BDR_Mosaic_Global_166m/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+  const moonTileSources = {
+    global: {
+      width: 21600,
+      height: 10800,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    north: {
+      width: 21600,
+      height: 10800,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Moon/NP/LRO_North_Pole/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    south: {
+      width: 21600,
+      height: 10800,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Moon/SP/LRO_South_Pole/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+  };
 
-
+  const mercuryTileSources = {
+    global: {
+      width: 98304,
+      height: 49152,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mercury/EQ/Mercury_MESSENGER_MDIS_Basemap_BDR_Mosaic_Global_166m/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    north: {
+      width: 98304,
+      height: 49152,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mercury/NP/Mercury_North_Pole/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+    south: {
+      width: 98304,
+      height: 49152,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Mercury/SP/Mercury_South_Pole/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
   };
 
   const currentTileSource =
     planet === "mars"
-      ? marsTileSource
+      ? marsTileSources[marsView]
       : planet === "moon"
-      ? moonTileSource
-      : mercuryTileSource;
+      ? moonTileSources[moonView]
+      : mercuryTileSources[mercuryView];
 
   return (
     <>
@@ -72,53 +133,64 @@ const moonTileSource = {
               : "Mercury"}
           </h1>
           <div style={{ margin: "15px" }}>
-            <button
-              onClick={() => setPlanet("mars")}
-              style={{
-                marginRight: "10px",
-                padding: "8px 16px",
-                backgroundColor: planet === "mars" ? "#d9534f" : "#555",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
-            >
-              Mars
-            </button>
-            <button
-              onClick={() => setPlanet("moon")}
-              style={{
-                marginRight: "10px",
-                padding: "8px 16px",
-                backgroundColor: planet === "moon" ? "#5bc0de" : "#555",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
-            >
-              Moon
-            </button>
-            <button
-              onClick={() => setPlanet("mercury")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: planet === "mercury" ? "#f0ad4e" : "#555",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
-            >
-              Mercury
-            </button>
+            {["mars", "moon", "mercury"].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPlanet(p)}
+                style={{
+                  marginRight: "10px",
+                  padding: "8px 16px",
+                  backgroundColor: planet === p ? "#337ab7" : "#555",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
           </div>
+
+          {planet === "mars" && (
+            <select
+              value={marsView}
+              onChange={(e) => setMarsView(e.target.value)}
+              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+            >
+              <option value="global">Global Map</option>
+              <option value="borth">North</option>
+              <option value="south">South</option>
+            </select>
+          )}
+
+          {planet === "moon" && (
+            <select
+              value={moonView}
+              onChange={(e) => setMoonView(e.target.value)}
+              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+            >
+              <option value="global">Global Map</option>
+              <option value="north">North Pole</option>
+              <option value="south">South Pole</option>
+            </select>
+          )}
+
+          {planet === "mercury" && (
+            <select
+              value={mercuryView}
+              onChange={(e) => setMercuryView(e.target.value)}
+              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+            >
+              <option value="global">Global Map</option>
+              <option value="north">North Pole</option>
+              <option value="south">South Pole</option>
+            </select>
+          )}
         </center>
 
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
           <OpenSeadragonViewer tileSource={currentTileSource} />
-
           <div
             style={{
               position: "absolute",
@@ -134,13 +206,13 @@ const moonTileSource = {
             }}
           >
             {planet === "mars"
-              ? "Red Planet Mars"
+              ? `Mars – ${marsView}`
               : planet === "moon"
-              ? "Earth's Moon"
-              : "Mercury"}
+              ? `Moon – ${moonView}`
+              : `Mercury – ${mercuryView}`}
           </div>
         </div>
       </div>
     </>
   );
-}
+} 

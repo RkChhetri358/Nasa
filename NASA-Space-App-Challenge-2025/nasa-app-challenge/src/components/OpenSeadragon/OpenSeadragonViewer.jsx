@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import OpenSeadragon from "openseadragon";
-import "./OpenSeadragonViewer.css"; // optional CSS file for extra styling
+import "./OpenSeadragonViewer.css";
 
 export default function OpenSeadragonViewer({ tileSource, maxZoom = 10 }) {
   const viewerRef = useRef(null);
 
   useEffect(() => {
+    if (!tileSource || !tileSource.getTileUrl) return;
+
     if (viewerRef.current && viewerRef.current.viewer) {
       viewerRef.current.viewer.destroy();
       viewerRef.current.viewer = null;
@@ -14,7 +16,14 @@ export default function OpenSeadragonViewer({ tileSource, maxZoom = 10 }) {
     const viewer = OpenSeadragon({
       element: viewerRef.current,
       prefixUrl: "https://openseadragon.github.io/openseadragon/images/",
-      tileSources: tileSource,
+      tileSources: {
+        height: tileSource.height,
+        width: tileSource.width,
+        tileSize: tileSource.tileSize,
+        minLevel: tileSource.minLevel,
+        maxLevel: tileSource.maxLevel,
+        getTileUrl: tileSource.getTileUrl,
+      },
       crossOriginPolicy: "Anonymous",
       showNavigator: true,
       navigatorPosition: "BOTTOM_RIGHT",
@@ -28,19 +37,17 @@ export default function OpenSeadragonViewer({ tileSource, maxZoom = 10 }) {
       maxZoomPixelRatio: maxZoom,
     });
 
-    // Default zoom when loaded
     viewer.addHandler("open", () => {
       viewer.viewport.zoomTo(0.3);
       viewer.viewport.panTo(new OpenSeadragon.Point(0.5, 0.5));
     });
 
-    // Log failed tiles
     viewer.addHandler("tile-load-failed", (event) => {
-      console.error("❌ Tile failed to load:", {
+      console.error("❌ Tile failed:", {
         level: event.tile.level,
         x: event.tile.x,
         y: event.tile.y,
-        url: event.tile.url,
+        url: event.tile.getUrl(),
       });
     });
 
@@ -49,10 +56,5 @@ export default function OpenSeadragonViewer({ tileSource, maxZoom = 10 }) {
     return () => viewer.destroy();
   }, [tileSource, maxZoom]);
 
-  return (
-    <div
-      ref={viewerRef}
-      className="osd-container"
-    />
-  );
+  return <div ref={viewerRef} className="osd-container" />;
 }
