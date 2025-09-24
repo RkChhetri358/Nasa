@@ -4,9 +4,12 @@ import OpenSeadragonViewer from "../OpenSeadragon/OpenSeadragonViewer";
 
 export default function Explore() {
   const [planet, setPlanet] = useState("mars");
+  const [viewMode, setViewMode] = useState("2d"); // "2d" or "3d"
+
   const [marsView, setMarsView] = useState("global");
   const [moonView, setMoonView] = useState("global");
   const [mercuryView, setMercuryView] = useState("global");
+  const [venusView, setVenusView] = useState("global");
 
   useEffect(() => {
     AOS.init({ duration: 5000 });
@@ -14,6 +17,7 @@ export default function Explore() {
 
   const proxy = "https://corsproxy.io/?";
 
+  // Mars
   const marsTileSources = {
     global: {
       width: 65536,
@@ -44,6 +48,7 @@ export default function Explore() {
     },
   };
 
+  // Moon
   const moonTileSources = {
     global: {
       width: 21600,
@@ -74,6 +79,20 @@ export default function Explore() {
     },
   };
 
+  // Venus
+  const venusTileSources = {
+    global: {
+      width: 23040,
+      height: 11520,
+      tileSize: 256,
+      minLevel: 0,
+      maxLevel: 7,
+      getTileUrl: (level, x, y) =>
+        `${proxy}https://trek.nasa.gov/tiles/Venus/EQ/Venus_Magellan_C3-MDIR_Global_Mosaic_2025m/1.0.0/default/default028mm/${level}/${y}/${x}.jpg`,
+    },
+  };
+
+  // Mercury
   const mercuryTileSources = {
     global: {
       width: 98304,
@@ -104,12 +123,23 @@ export default function Explore() {
     },
   };
 
+  // Active tile source
   const currentTileSource =
     planet === "mars"
       ? marsTileSources[marsView]
       : planet === "moon"
       ? moonTileSources[moonView]
-      : mercuryTileSources[mercuryView];
+      : planet === "mercury"
+      ? mercuryTileSources[mercuryView]
+      : venusTileSources[venusView];
+
+  // 3D URLs (NASA Eyes)
+  const planet3DUrls = {
+    mars: "https://eyes.nasa.gov/apps/solar-system/#/mars?embed=true",
+    moon: "https://eyes.nasa.gov/apps/solar-system/#/moon?embed=true",
+    mercury: "https://eyes.nasa.gov/apps/solar-system/#/mercury?embed=true",
+    venus: "https://eyes.nasa.gov/apps/solar-system/#/venus?embed=true",
+  };
 
   return (
     <>
@@ -117,7 +147,9 @@ export default function Explore() {
         <center>
           <h1>Welcome to Embiggen Your Eyes!</h1>
           <p style={{ maxWidth: "600px", margin: "0 auto", fontSize: "18px" }}>
-            Explore the wonders of the universe through high-resolution imagery. Dive deep into Mars, the Moon, and Mercury with our interactive viewer powered by OpenSeadragon.
+            Explore the wonders of the universe through high-resolution imagery
+            and interactive 3D globes. Switch between 2D maps and 3D globes for
+            Mars, the Moon, Mercury, and Venus.
           </p>
         </center>
       </div>
@@ -130,10 +162,14 @@ export default function Explore() {
               ? "Red Planet Mars"
               : planet === "moon"
               ? "Moon"
-              : "Mercury"}
+              : planet === "mercury"
+              ? "Mercury"
+              : "Venus"}
           </h1>
+
+          {/* Planet Buttons */}
           <div style={{ margin: "15px" }}>
-            {["mars", "moon", "mercury"].map((p) => (
+            {["mars", "moon", "mercury", "venus"].map((p) => (
               <button
                 key={p}
                 onClick={() => setPlanet(p)}
@@ -152,23 +188,63 @@ export default function Explore() {
             ))}
           </div>
 
-          {planet === "mars" && (
+          {/* Mode Toggle */}
+          <div style={{ marginBottom: "20px" }}>
+            <button
+              onClick={() => setViewMode("2d")}
+              style={{
+                marginRight: "10px",
+                padding: "8px 16px",
+                backgroundColor: viewMode === "2d" ? "#28a745" : "#555",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              2D Map
+            </button>
+            <button
+              onClick={() => setViewMode("3d")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: viewMode === "3d" ? "#28a745" : "#555",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              3D Globe
+            </button>
+          </div>
+
+          {/* Extra view selectors only in 2D mode */}
+          {viewMode === "2d" && planet === "mars" && (
             <select
               value={marsView}
               onChange={(e) => setMarsView(e.target.value)}
-              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+              style={{
+                marginBottom: "20px",
+                padding: "6px 12px",
+                fontSize: "16px",
+              }}
             >
               <option value="global">Global Map</option>
-              <option value="borth">North</option>
-              <option value="south">South</option>
+              <option value="valles">Valles Marineris</option>
+              <option value="olympus">Olympus Mons</option>
             </select>
           )}
 
-          {planet === "moon" && (
+          {viewMode === "2d" && planet === "moon" && (
             <select
               value={moonView}
               onChange={(e) => setMoonView(e.target.value)}
-              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+              style={{
+                marginBottom: "20px",
+                padding: "6px 12px",
+                fontSize: "16px",
+              }}
             >
               <option value="global">Global Map</option>
               <option value="north">North Pole</option>
@@ -176,21 +252,66 @@ export default function Explore() {
             </select>
           )}
 
-          {planet === "mercury" && (
+          {viewMode === "2d" && planet === "mercury" && (
             <select
               value={mercuryView}
               onChange={(e) => setMercuryView(e.target.value)}
-              style={{ marginBottom: "20px", padding: "6px 12px", fontSize: "16px" }}
+              style={{
+                marginBottom: "20px",
+                padding: "6px 12px",
+                fontSize: "16px",
+              }}
             >
               <option value="global">Global Map</option>
               <option value="north">North Pole</option>
               <option value="south">South Pole</option>
+            </select>
+          )}
+
+          {viewMode === "2d" && planet === "venus" && (
+            <select
+              value={venusView}
+              onChange={(e) => setVenusView(e.target.value)}
+              style={{
+                marginBottom: "20px",
+                padding: "6px 12px",
+                fontSize: "16px",
+              }}
+            >
+              <option value="global">Global Map</option>
             </select>
           )}
         </center>
 
-        <div style={{ position: "relative", width: "100%", height: "100%" }}>
-          <OpenSeadragonViewer tileSource={currentTileSource} />
+        {/* Viewer */}
+        <div style={{ position: "relative", width: "100%", height: "600px" }}>
+          {viewMode === "2d" ? (
+            <OpenSeadragonViewer tileSource={currentTileSource} />
+          ) : (
+            <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              <iframe
+                src={`${planet3DUrls[planet]}&embed=true`}
+                width="100%"
+                height="100%"
+                style={{ border: "none" }}
+                allowFullScreen
+              ></iframe>
+
+              {/* Overlay to hide NASA Eyes header + menu */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "70px", // adjust as needed
+                  backgroundColor: "black",
+                  zIndex: 10,
+                }}
+              ></div>
+            </div>
+          )}
+
           <div
             style={{
               position: "absolute",
@@ -205,14 +326,10 @@ export default function Explore() {
               fontSize: "16px",
             }}
           >
-            {planet === "mars"
-              ? `Mars – ${marsView}`
-              : planet === "moon"
-              ? `Moon – ${moonView}`
-              : `Mercury – ${mercuryView}`}
+            {planet.toUpperCase()} – {viewMode === "2d" ? "2D Map" : "3D Globe"}
           </div>
         </div>
       </div>
     </>
   );
-} 
+}
