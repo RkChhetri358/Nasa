@@ -1,90 +1,119 @@
-# from fastapi import FastAPI
-# from fastapi.responses import Response
-# import httpx
-
-# app = FastAPI()
-
-# @app.get("/proxy/{body}/{rest_of_path:path}")
-# async def proxy_tiles(body: str, rest_of_path: str):
-#     """
-#     Proxy NASA Trek tiles to bypass CORS restrictions.
-#     Example: /proxy/Moon/EQ/... -> https://trek.nasa.gov/tiles/Moon/EQ/...
-#     """
-#     url = f"https://trek.nasa.gov/tiles/{body}/{rest_of_path}"
-    
-#     async with httpx.AsyncClient() as client:
-#         r = await client.get(url)
-    
-#     # Return the image with correct headers
-#     return Response(
-#         content=r.content,
-#         media_type=r.headers.get("content-type", "image/jpeg"),
-#         headers={"Access-Control-Allow-Origin": "*"}
-#     )
-
-
-# backend/main.py
-from fastapi import FastAPI
-from fastapi.responses import Response, JSONResponse
+from fastapi import FastAPI, Path, Query
+from fastapi.responses import FileResponse, StreamingResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
+import geopandas as gpd
+import os
 import httpx
-from PIL import Image
-import io
-from ultralytics import YOLO
 
 app = FastAPI()
 
-# Use a small YOLO model (will download if needed)
-# You can switch to "yolov8n.pt" or another weight you prefer.
-model = YOLO("yolov8n.pt")
+# === CORS for frontend ===
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # change to ["http://localhost:3000"] for production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/proxy/{body}/{rest_of_path:path}")
-async def proxy_tiles(body: str, rest_of_path: str, detect: bool = False):
+# === Auto-detect project root ===
+CURRENT_FILE = os.path.abspath(__file__)
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_FILE, "..", ".."))
+print("Current file:", CURRENT_FILE)
+print("Project root:", PROJECT_ROOT)
+
+# === Favicon ===
+@app.get("/favicon.ico")
+async def favicon():
+    favicon_path = os.path.join(PROJECT_ROOT, "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    return Response(status_code=404)
+
+# === Auto-discover Moon shapefile ===
+SHP_PATH = None
+for root, dirs, files in os.walk(PROJECT_ROOT):
+    for f in files:
+        if f.lower().endswith(".shp") and "moon_nomenclature_center_pts" in f.lower():
+            SHP_PATH = os.path.join(root, f)
+            break
+    if SHP_PATH:
+        break
+
+if not SHP_PATH or not os.path.exists(SHP_PATH):
+    raise FileNotFoundError("Could not find MOON_nomenclature_center_pts.shp anywhere in project!")
+
+print("Using shapefile:", SHP_PATH)
+
+# Load shapefile once
+moon_gdf = gpd.read_file(SHP_PATH)
+
+# === Root endpoint ===
+@app.get("/")
+async def root():
+    return {"message": "NASA Space App Backend running!"}
+
+# === Moon labels endpoint ===
+@app.get("/labels/moon")
+async def get_moon_labels(limit: int = 500):
+    features = []
+    for _, row in moon_gdf.head(limit).iterrows():
+        features.append({
+            "name": row.get("name"),
+            "clean_name": row.get("clean_name"),
+            "type": row.get("type"),
+            "diameter": row.get("diameter"),
+            "lon": float(row.get("center_lon")),
+            "lat": float(row.get("center_lat")),
+        })
+    return {"labels": features}
+
+# === Proxy endpoint for OpenSeadragon tiles ===
+@app.get("/proxy/{planet}/{rest_of_path:path}")
+async def proxy_tile(planet: str, rest_of_path: str):
     """
-    Proxy NASA Trek tiles; when ?detect=true runs the YOLO detector and returns JSON features.
+    Proxy tiles from NASA for OpenSeadragon.
+    Adds CORS headers to avoid browser blocking.
     """
-    url = f"https://trek.nasa.gov/tiles/{body}/{rest_of_path}"
+    nasa_base_url = "https://trek.nasa.gov/tiles"
+    tile_url = f"{nasa_base_url}/{planet}/{rest_of_path}"
+
     async with httpx.AsyncClient() as client:
-        r = await client.get(url)
+        resp = await client.get(tile_url)
+        if resp.status_code == 200:
+            headers = {"Access-Control-Allow-Origin": "*"}  # fix CORS
+            return StreamingResponse(resp.aiter_bytes(), media_type="image/jpeg", headers=headers)
+        return Response(
+            content=f"Tile not found: {tile_url}",
+            status_code=404,
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
 
-    if r.status_code != 200:
-        # forward non-200 status and content
-        return Response(content=r.content, status_code=r.status_code)
+# === AI detection endpoint for features ===
+@app.get("/detect/{planet}")
+async def detect_features(
+    planet: str = Path(..., description="Planet name"),
+    level: int = Query(0, description="Tile zoom level"),
+    x: int = Query(0, description="Tile x coordinate"),
+    y: int = Query(0, description="Tile y coordinate")
+):
+    """
+    Returns detected features for a planet.
+    Currently, only Moon returns features from shapefile.
+    """
+    results = []
 
-    image_bytes = r.content
+    if planet.lower() == "moon":
+        # For now, return all Moon labels
+        for _, row in moon_gdf.iterrows():
+            results.append({
+                "name": row.get("name"),
+                "type": row.get("type"),
+                "lon": float(row.get("center_lon")),
+                "lat": float(row.get("center_lat")),
+                "diameter": row.get("diameter"),
+            })
+    else:
+        # Placeholder for Mars, Mercury, Venus
+        results = []
 
-    if detect:
-        # Run detection
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        results = model.predict(source=img, device="cpu")  # runs prediction, returns Results
-        features = []
-        for res in results:  # usually just one result for a single image
-            if getattr(res, "boxes", None) is None:
-                continue
-            # res.boxes.xyxy -> tensor (N,4); res.boxes.cls -> tensor (N,)
-            xyxy = res.boxes.xyxy.cpu().numpy() if len(res.boxes.xyxy) else []
-            cls  = res.boxes.cls.cpu().numpy().astype(int) if len(res.boxes.cls) else []
-            names = res.names  # dict: id->name
-            for (x1, y1, x2, y2), c in zip(xyxy, cls):
-                x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
-                c = int(c)
-                name = names.get(c, str(c))
-                features.append({
-                    "xmin": x1,
-                    "ymin": y1,
-                    "xmax": x2,
-                    "ymax": y2,
-                    "type": str(name),
-                    "xmin_norm": x1 / img.width,
-                    "xmax_norm": x2 / img.width,
-                    "ymin_norm": y1 / img.height,
-                    "ymax_norm": y2 / img.height,
-                })
-        return JSONResponse(content={"features": features}, headers={"Access-Control-Allow-Origin": "*"})
-
-    # normal passthrough (tile image)
-    return Response(
-        content=image_bytes,
-        media_type=r.headers.get("content-type", "image/jpeg"),
-        headers={"Access-Control-Allow-Origin": "*"}
-    )
-    
+    return {"features": results}

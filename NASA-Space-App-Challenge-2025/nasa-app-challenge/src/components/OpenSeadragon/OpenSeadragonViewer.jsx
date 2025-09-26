@@ -1,94 +1,67 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import OpenSeadragon from "openseadragon";
 
-export default function OpenSeadragonViewer({ tileSource, maxZoom = 10 }) {
+export default function OpenSeadragonViewer({ tileSource, features = [] }) {
   const viewerRef = useRef(null);
-  const [showFeatures, setShowFeatures] = useState(false);
-  const overlayRefs = useRef([]);
-
-  const fetchTileFeatures = async (level, x, y) => {
-    try {
-      const res = await fetch(
-        `/proxy/${tileSource.planet}/${tileSource.view}/${level}/${y}/${x}.jpg?detect=true`
-      );
-      const data = await res.json();
-
-      data.features.forEach((f) => {
-        const div = document.createElement("div");
-        div.style.border = `2px solid ${
-          f.type === "crater" ? "red" : f.type === "volcano" ? "orange" : "yellow"
-        }`;
-        div.style.position = "absolute";
-        div.style.backgroundColor = "rgba(255,255,255,0.1)";
-        div.title = f.type;
-
-        viewerRef.current.viewer.addOverlay({
-          element: div,
-          location: new OpenSeadragon.Rect(
-            f.xmin_norm * tileSource.width,
-            f.ymin_norm * tileSource.height,
-            (f.xmax_norm - f.xmin_norm) * tileSource.width,
-            (f.ymax_norm - f.ymin_norm) * tileSource.height
-          ),
-        });
-
-        overlayRefs.current.push(div);
-      });
-    } catch (err) {
-      console.error("Error fetching features:", err);
-    }
-  };
 
   useEffect(() => {
-    if (!tileSource) return;
-
-    if (viewerRef.current && viewerRef.current.viewer) {
+    // Destroy previous viewer if exists
+    if (viewerRef.current?.viewer) {
       viewerRef.current.viewer.destroy();
       viewerRef.current.viewer = null;
-      overlayRefs.current = [];
     }
 
-    const viewer = OpenSeadragon({
+    // Initialize OpenSeadragon viewer
+    viewerRef.current.viewer = OpenSeadragon({
       element: viewerRef.current,
       prefixUrl: "https://openseadragon.github.io/openseadragon/images/",
-      tileSources: tileSource,
-      crossOriginPolicy: "Anonymous",
-      showNavigator: true,
-      minZoomLevel: 0,
-      maxZoomPixelRatio: maxZoom,
+      showNavigationControl: true,
+      tileSources: {
+        width: tileSource.width,
+        height: tileSource.height,
+        tileSize: tileSource.tileSize,
+        minLevel: tileSource.minLevel,
+        maxLevel: tileSource.maxLevel,
+        getTileUrl: tileSource.getTileUrl,
+      },
     });
 
-    // Default zoom
-    viewer.addHandler("open", () => viewer.viewport.zoomTo(0.3));
+    const viewer = viewerRef.current.viewer;
 
-    // Fetch features for visible tiles on pan/zoom
-    const handleUpdate = () => {
-      if (!showFeatures) return;
+    // Clear previous overlays
+    viewer.clearOverlays();
 
-      // Clear previous overlays
-      overlayRefs.current.forEach((el) => el.remove());
-      overlayRefs.current = [];
+    // Add markers for features
+    features.forEach((feature) => {
+      const elt = document.createElement("div");
+      elt.style.width = "12px";
+      elt.style.height = "12px";
+      elt.style.background = "red";
+      elt.style.borderRadius = "50%";
+      elt.style.border = "2px solid white";
+      elt.title = feature.name;
 
-      // Determine visible tiles (simplified: level 0 for example)
-      fetchTileFeatures(0, 0, 0); 
+      // OpenSeadragon expects coordinates as fraction of the image
+      const xFrac = (feature.lon + 180) / 360; // adjust if lon range differs
+      const yFrac = (90 - feature.lat) / 180;  // adjust if lat range differs
+
+      viewer.addOverlay({
+        element: elt,
+        location: viewer.viewport.imageToViewportRectangle(
+          xFrac * tileSource.width,
+          yFrac * tileSource.height,
+          12,
+          12
+        ),
+      });
+    });
+
+    return () => {
+      if (viewerRef.current?.viewer) {
+        viewerRef.current.viewer.destroy();
+      }
     };
+  }, [tileSource, features]);
 
-    viewer.addHandler("viewport-change", handleUpdate);
-
-    viewerRef.current.viewer = viewer;
-
-    return () => viewer.destroy();
-  }, [tileSource, maxZoom, showFeatures]);
-
-  return (
-    <div>
-      <button
-        onClick={() => setShowFeatures((prev) => !prev)}
-        style={{ marginBottom: "10px" }}
-      >
-        {showFeatures ? "Hide AI Features" : "Show AI Features"}
-      </button>
-      <div ref={viewerRef} style={{ width: "100%", height: "80vh" }} />
-    </div>
-  );
+  return <div ref={viewerRef} style={{ width: "100%", height: "100%" }} />;
 }
